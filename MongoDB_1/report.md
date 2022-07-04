@@ -29,7 +29,7 @@ docker-compose -f mongodbotus/docker-compose.yml
 ```bash 
 $ python3 generator_data.py
 ```
-code: [Python скрипт для генерации данных](./geneartor_data.py)
+code: [Python скрипт для генерации данных](./generator_data.py)
 
 Результат
 
