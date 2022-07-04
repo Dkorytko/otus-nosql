@@ -105,7 +105,6 @@ mongo hw
 
 ```
 db.employees.find({"table_number": {$gt: 1000}}).sort({"table_number": 1}).limit(5).explain("executionStats")
-
 ```
 Результат
 ```json
