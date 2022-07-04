@@ -339,8 +339,9 @@ db.employees.find({"table_number": {$gt: 1000}}).sort({"table_number": 1}).limit
         },
         "ok" : 1
 }
-
 ```
 
 ## ВЫВОД
+ В первом случае было просмотрено 1 000 000 документов, параметр [`totalDocsExamined=1000000`], тогда как после создание индекса только 5 [`totalDocsExamined=5`]. Можно сделать вывод о том, что добавление индекса положительно повлияло на стоимость запроса.
 
+![mermaid-diagram-2](./images/compare_results.png)
