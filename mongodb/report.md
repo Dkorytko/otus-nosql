@@ -39,13 +39,11 @@ root@vps-139128:~/mongodb# python3 generator_data.py
 Файл создан.
 
 -rw-r--r-- 1 root root 125053139 Jul  4 16:15 employees.json
-
 ```
 
 # Импорт данных
 
 Заходим в контейнер и создаем БД в которую будем выполнять импорт данных.
-
 ```
 docker exec -it mongodb bash
 mongo
@@ -53,16 +51,12 @@ mongo
 > exit
 exit
 ```
-
-
 Копируем employees внутрь контейнера
-
 ```
 docker cp employees.json mongodb:/
 docker exec -it mongodb bash
 mongoimport --db hw --collection employees --drop --jsonArray --file /employees.json
 ```
-
 Результат
 ```
 2022-07-04T13:31:31.283+0000	connected to: mongodb://localhost/
@@ -77,10 +71,7 @@ mongoimport --db hw --collection employees --drop --jsonArray --file /employees.
 2022-07-04T13:31:54.056+0000	[########################] hw.employees	119MB/119MB (100.0%)
 2022-07-04T13:31:54.057+0000	1000000 document(s) imported successfully. 0 document(s) failed to import.
 ```
-
-
 Выполняем поиск 5 значений с `age` больше 90
-
 ```
 mongo hw
 
@@ -92,17 +83,13 @@ mongo hw
 { "_id" : ObjectId("62c33e4502aed706499ae5da"), "table_number" : 54239, "age" : 98, "name" : "Donald Klein", "email" : "phernandez@example.net", "phone" : "932-484-5192x44438" }
 { "_id" : ObjectId("62c33e4502aed706499ae5e4"), "table_number" : 92775, "age" : 98, "name" : "Matthew Roberts", "email" : "erika85@example.org", "phone" : "001-149-080-5170" }
 ```
-
 Обновим *age* у сотрудника  с id `62c33e4502aed706499ae5c6`
-
 ```
 > db.employees.updateOne({ _id: ObjectId("62c33e4502aed706499ae5c6") }, {$set: {"age": 30}})
 
 { "acknowledged" : true, "matchedCount" : 1, "modifiedCount" : 1 }
 ```
-
 Найдем 5 значений с `table_number` больше 1000
-
 ```
 db.employees.find({"table_number": {$gt: 1000}}).sort({"table_number": 1}).limit(5).explain("executionStats")
 ```
@@ -204,7 +191,6 @@ db.employees.find({"table_number": {$gt: 1000}}).sort({"table_number": 1}).limit
         "ok" : 1
 }
 ```
-
  Создадим индекс для поля `table_number` и запустим запрос еще раз
  ```
 > db.employees.createIndex({table_number: 1})
@@ -339,7 +325,6 @@ db.employees.find({"table_number": {$gt: 1000}}).sort({"table_number": 1}).limit
         "ok" : 1
 }
 ```
-
 ## ВЫВОД
  В первом случае было просмотрено 1 000 000 документов, параметр [`totalDocsExamined=1000000`], тогда как после создание индекса только 5 [`totalDocsExamined=5`]. Можно сделать вывод о том, что добавление индекса положительно повлияло на стоимость запроса.
 
