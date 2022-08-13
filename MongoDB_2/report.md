@@ -391,4 +391,217 @@ $ mongo --host repset3/127.0.0.1:27301,127.0.0.1:27302,127.0.0.1:27303 -u "admin
 
  ```
 
+## Настройка шардирования
+
+Запустим mongos, указав repsetConfig 
+
+```bash 
+$ mongos --configdb repsetConfig/127.0.0.1:26001,127.0.0.1:26002,127.0.0.1:26003 --fork --logpath /tmp/data/mongos1.log --keyFile /tmp/data/keyfile.f
+
+```
+ 
+Подключаюсь с использованием пользователя и пароля, добавляю созданные ранее реплика-сеты в качестве шардов, проверяю статус
+
+```bash
+$ mongo -u "admin" -p "12345" --authenticationDatabase "admin"
+```
+
+```
+sh.addShard("repset1/127.0.0.1:27101,127.0.0.1:27102,127.0.0.1:27103");
+sh.addShard("repset2/127.0.0.1:27201,127.0.0.1:27202,127.0.0.1:27203");
+sh.addShard("repset3/127.0.0.1:27301,127.0.0.1:27302,127.0.0.1:27303");
+
+sh.status();
+```
+Резуьтат
+```
+--- Sharding Status --- 
+  sharding version: {
+  	"_id" : 1,
+  	"minCompatibleVersion" : 5,
+  	"currentVersion" : 6,
+  	"clusterId" : ObjectId("62f7876c00b29184aa63ddd3")
+  }
+  shards:
+        {  "_id" : "repset1",  "host" : "repset1/127.0.0.1:27101,127.0.0.1:27102,127.0.0.1:27103",  "state" : 1 }
+        {  "_id" : "repset2",  "host" : "repset2/127.0.0.1:27201,127.0.0.1:27202,127.0.0.1:27203",  "state" : 1 }
+        {  "_id" : "repset3",  "host" : "repset3/127.0.0.1:27301,127.0.0.1:27302,127.0.0.1:27303",  "state" : 1 }
+  active mongoses:
+        "4.4.15" : 1
+  autosplit:
+        Currently enabled: yes
+  balancer:
+        Currently enabled:  yes
+        Currently running:  no
+        Failed balancer rounds in last 5 attempts:  0
+        Migration Results for the last 24 hours: 
+                4 : Success
+  databases:
+        {  "_id" : "config",  "primary" : "config",  "partitioned" : true }
+                config.system.sessions
+                        shard key: { "_id" : 1 }
+                        unique: false
+                        balancing: true
+                        chunks:
+                                repset1	1020
+                                repset2	2
+                                repset3	2
+                        too many chunks to print, use verbose if you want to force print
+```
+
+## Наполнение данными
+
+Шардирование БД dkdb и shop. Коллекцию phones в БД shop заполняю, создаю 30000 документов. Смотрю статус шардирования, как документы распространяются по шардам.
+
+```
+sh.enableSharding("dkdb")
+sh.enableSharding("shop")
+
+use shop
+for (var i=0; i<30000; i++) { db.phones.insert({name: "Phone", price: Math.random()*500}) };
+db.phones.ensureIndex({price: 1});
+
+use admin
+db.runCommand({shardCollection: "shop.phones", key: {price: 1}});
+sh.status();
+```
+
+Результат
+```
+--- Sharding Status --- 
+  sharding version: {
+  	"_id" : 1,
+  	"minCompatibleVersion" : 5,
+  	"currentVersion" : 6,
+  	"clusterId" : ObjectId("62f7876c00b29184aa63ddd3")
+  }
+  shards:
+        {  "_id" : "repset1",  "host" : "repset1/127.0.0.1:27101,127.0.0.1:27102,127.0.0.1:27103",  "state" : 1 }
+        {  "_id" : "repset2",  "host" : "repset2/127.0.0.1:27201,127.0.0.1:27202,127.0.0.1:27203",  "state" : 1 }
+        {  "_id" : "repset3",  "host" : "repset3/127.0.0.1:27301,127.0.0.1:27302,127.0.0.1:27303",  "state" : 1 }
+  active mongoses:
+        "4.4.15" : 1
+  autosplit:
+        Currently enabled: yes
+  balancer:
+        Currently enabled:  yes
+        Currently running:  no
+        Failed balancer rounds in last 5 attempts:  0
+        Migration Results for the last 24 hours: 
+                682 : Success
+  databases:
+        {  "_id" : "config",  "primary" : "config",  "partitioned" : true }
+                config.system.sessions
+                        shard key: { "_id" : 1 }
+                        unique: false
+                        balancing: true
+                        chunks:
+                                repset1	342
+                                repset2	341
+                                repset3	341
+                        too many chunks to print, use verbose if you want to force print
+        {  "_id" : "dkdb",  "primary" : "repset3",  "partitioned" : true,  "version" : {  "uuid" : UUID("75a967d0-9d21-42d7-9712-5828f3ba7dfb"),  "lastMod" : 1 } }
+        {  "_id" : "shop",  "primary" : "repset2",  "partitioned" : true,  "version" : {  "uuid" : UUID("14d27741-f498-417b-a55b-6f59a9186427"),  "lastMod" : 1 } }
+                shop.phones
+                        shard key: { "price" : 1 }
+                        unique: false
+                        balancing: true
+                        chunks:
+                                repset2	1
+                        { "price" : { "$minKey" : 1 } } -->> { "price" : { "$maxKey" : 1 } } on : repset2 Timestamp(1, 0)
+```
+
+Данные распределились по шардам. Подключаюсь к реплика-сетам поочерёдно и выполняю:
+```
+db.phones.find().count();
+```
+
+На repset2 показывает 30000 документов, на repset1, repset3 - 0 документов. 
+
+В БД dkdb создаю аналогичную коллекцию, но добавляю поле "status", которое может принимать только значения 1, 2, 3. 
+Создаю индекс и шардирую по status, после этого заполняю данными:
+```
+ status=1 50000 документов
+ status=2 150000 документов 
+ status=3 200000 документов 
+ ```
+
+ ```
+use dkdb
+db.phones.ensureIndex({status : 1});
+
+use admin
+db.runCommand({shardCollection: "dkdb.phones", key: {status: 1}});
+
+use dkdb
+for (var i=0; i<50000; i++) { db.phones.insert({name: "Phone", price: Math.random()*500, status:1}) };
+for (var i=0; i<150000; i++) { db.phones.insert({name: "Phone", price: Math.random()*500, status:2}) };
+ ```
+
+ Командой sh.status() смотримБ как должны будут расположиться данные. Когда данные уже начали распространятья, запустим еще одну операцию вставки:
+```
+for (var i=0; i<200000; i++) { db.phones.insert({name: "Phone", price: Math.random()*500, status:3}) };
+```
+
+В результате, кластер перебалансировался, на каждом шарде остались документы только с одним "status".
+
+## Отказоустойчивость
+
+Отказ одной ноды в replica-set
+
+Выключим primary во всех реплика-сетах, кроме конфиг-сервера. 
+Проверим вставку и наличие данных на шардах. На primary во всех replica-set:
+
+```
+use admin
+db.shutdownServer();
+```
+
+При подключении к mongos:
+```
+use dkdb
+db.phones.insert([{name: "Phone1", price: 7777, status:1}, {name: "Phone2", price: 8888, status:2}, {name: "Phone3", price: 9999, status:3}]);
+```
+При подключении к replica-set'ам видно, что количество записей во всех rs увеличилось на 1.
+
+## Отказ не primary-шарда
+
+Полностью выключим один из шардов, проверим вставку данных с ключом шардирования на этом и на других серверах. Возвращаем реплика-сет к жизни, проверяю, что данные на нём появились.
+Выключаем все сервера, входящие в replica-set repset1, который не является primary для mydb.phones. Пробую вставить новые данные во все шарды:
+
+```
+use dkdb
+db.phones.insert([{name: "Phone1", price: 7777, status:1}, {name: "Phone2", price: 8888, status:2}, {name: "Phone3", price: 9999, status:3}]);
+```
+
+Операция "висит", потом получаем сообщение об ошибке, при этом вставка в шарды, "обслуживающие" status=1 и status=2 проходит. Пробую вставить данные только в шарды для status=1 и status=2
+
+```
+db.phones.insert([{name: "Phone1", price: 7777, status:1}, {name: "Phone2", price: 8888, status:2}]);
+
+```
+
+данные вставлены, доступны как при подключении в monogs, так и к repset3/repset2 напрямую. Перезапускаем repset1, пробую вставку во все 3 шарда, операция завершается успешно, данные доступны.
+
+## Отказ primary-шарда
+По аналогии с предыдущим опирациями выключаем шард, который является primary для dkdb.phones - в моём случае repset3. Проверяю sh.status(). 
+Изменений в выводе sh.status() не обнаружено, проверяем вставку в коллекцию, но без status=1 (status=1 относится к repset3).
+
+```
+db.phones.insert([{name: "Phone1", price: 7777, status:2}, {name: "Phone2", price: 8888, status:3}]);
+
+```
+Данные вставлены успешно. Запросы выполняются при подключении к mongos
+
+```
+db.phones.find({"status":2}).count();
+db.phones.find({"status":3}).count();
+```
+При этом, запрос, который должен обратиться в т.ч. к выключенному шарду,
+
+```
+db.phones.find()
+```
+завершается ошибкой.
+
 
