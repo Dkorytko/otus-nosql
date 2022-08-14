@@ -186,3 +186,4 @@ cbq> select * from `travel-sample` limit 1;
 
 ## Проверим отказоустойчивость
 
+![load](./images/load.png)
